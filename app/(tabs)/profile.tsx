@@ -66,7 +66,17 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#19191b" />
-
+      <View style={styles.navHeader}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>Perfil</Text>
+        <View style={{ width: 40 }} />
+      </View>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -79,6 +89,7 @@ export default function ProfileScreen() {
           />
         }
       >
+     
         {pacienteFoto ? (
           <TouchableOpacity
             style={styles.avatarWrapper}
@@ -194,6 +205,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#19191b',
+  },
+  navHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#262628',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+    navTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   scrollContent: {
     paddingHorizontal: 24,

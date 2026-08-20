@@ -11,12 +11,12 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import axios from 'axios';
 import { useAuthStore } from '@/store/useAuthStore';
 import { api } from '@/services/api';
 
@@ -49,17 +49,23 @@ export default function EditProfileScreen() {
     const [fotoChanged, setFotoChanged] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    const [feedback, setFeedback] = useState<{
+        type: 'success' | 'error';
+        message: string;
+    } | null>(null);
+
     const handlePhoneChange = (text: string) => {
         setTelefone(maskPhone(text));
+        if (feedback) setFeedback(null);
     };
 
     const handlePickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert(
-                'Permissão necessária',
-                'Precisamos de acesso à sua galeria para alterar a foto de perfil.'
-            );
+            setFeedback({
+                type: 'error',
+                message: 'Permissão necessária para acessar a galeria de fotos.',
+            });
             return;
         }
 
@@ -73,12 +79,20 @@ export default function EditProfileScreen() {
         if (!result.canceled && result.assets[0]?.uri) {
             setFotoUri(result.assets[0].uri);
             setFotoChanged(true);
+            if (feedback) setFeedback(null);
         }
     };
 
     const handleSave = async () => {
+        setFeedback(null);
+
+        if (!paciente?.id) {
+            setFeedback({ type: 'error', message: 'Sessão inválida. Faça login novamente.' });
+            return;
+        }
+
         if (!nome.trim()) {
-            Alert.alert('Atenção', 'O campo Nome é obrigatório.');
+            setFeedback({ type: 'error', message: 'O campo Nome Completo é obrigatório.' });
             return;
         }
 
@@ -86,39 +100,54 @@ export default function EditProfileScreen() {
 
         try {
             const formData = new FormData();
+            formData.append('_method', 'PUT');
             formData.append('nome', nome.trim());
             formData.append('email', email.trim());
             formData.append('telefone', telefone);
 
             if (fotoChanged && fotoUri) {
-                const filename = fotoUri.split('/').pop() || 'avatar.jpg';
-                const match = /\.(\w+)$/.exec(filename);
-                const type = match ? `image/${match[1]}` : 'image/jpeg';
+                if (Platform.OS === 'web') {
+                    const res = await fetch(fotoUri);
+                    const blob = await res.blob();
+                    formData.append('foto', blob, 'avatar.jpg');
+                } else {
+                    const filename = fotoUri.split('/').pop() || 'avatar.jpg';
+                    const match = /\.(\w+)$/.exec(filename);
+                    const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-                formData.append('foto', {
-                    uri: fotoUri,
-                    name: filename,
-                    type,
-                } as any);
+                    formData.append('foto', {
+                        uri: fotoUri,
+                        name: filename,
+                        type,
+                    } as any);
+                }
             }
 
-            const response = await api.post('/pacientes/update', formData, {
-                headers: {
-                'Content-Type': 'multipart/form-data',
-                },
+            const response = await api.post(`/pacientes/${paciente.id}`, formData);
+
+            if (response.data.data) {
+                setPaciente(response.data.data);
+            }
+
+            setFeedback({
+                type: 'success',
+                message: response.data.message || 'Perfil atualizado com sucesso!',
             });
 
-            const updatedPaciente = response.data.paciente || response.data;
-            if (updatedPaciente) {
-                setPaciente(updatedPaciente);
+        } catch (error: any) {
+            console.error('Erro detalhado:', error?.response?.data || error);
+
+            let errorMsg = 'Não foi possível salvar as alterações.';
+            if (axios.isAxiosError(error)) {
+                if (error.response?.data?.errors) {
+                    const firstKey = Object.keys(error.response.data.errors)[0];
+                    errorMsg = error.response.data.errors[firstKey][0];
+                } else if (error.response?.data?.message) {
+                    errorMsg = error.response.data.message;
+                }
             }
 
-            Alert.alert('Sucesso', 'Perfil atualizado com sucesso!', [
-                { text: 'OK', onPress: () => router.back() },
-            ]);
-        } catch (error: any) {
-            const message = error.response?.data?.message || 'Não foi possível salvar as alterações.';
-            Alert.alert('Erro ao salvar', message);
+            setFeedback({ type: 'error', message: errorMsg });
         } finally {
             setSaving(false);
         }
@@ -148,18 +177,59 @@ export default function EditProfileScreen() {
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
+                    {feedback && (
+                        <View
+                            style={[
+                                styles.feedbackBanner,
+                                feedback.type === 'success'
+                                ? styles.feedbackSuccess
+                                : styles.feedbackError,
+                            ]}
+                        >
+                        <Ionicons
+                            name={
+                            feedback.type === 'success'
+                                ? 'checkmark-circle'
+                                : 'alert-circle'
+                            }
+                            size={20}
+                            color={feedback.type === 'success' ? '#30D158' : '#FF453A'}
+                        />
+                        <Text
+                            style={[
+                            styles.feedbackText,
+                            feedback.type === 'success'
+                                ? styles.feedbackTextSuccess
+                                : styles.feedbackTextError,
+                            ]}
+                        >
+                            {feedback.message}
+                        </Text>
+                            <TouchableOpacity
+                                onPress={() => setFeedback(null)}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Ionicons
+                                name="close"
+                                size={18}
+                                color={feedback.type === 'success' ? '#30D158' : '#FF453A'}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     <View style={styles.avatarSection}>
                         <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={handlePickImage}
-                                style={styles.avatarWrapper}
-                            >
+                            activeOpacity={0.8}
+                            onPress={handlePickImage}
+                            style={styles.avatarWrapper}
+                        >
                             {fotoUri ? (
                                 <Image source={{ uri: fotoUri }} style={styles.avatar} />
                             ) : (
                                 <View style={styles.avatarPlaceholder}>
-                                    <Ionicons name="person" size={54} color="#1A82FF" />
+                                <Ionicons name="person" size={54} color="#1A82FF" />
                                 </View>
                             )}
                             <View style={styles.cameraBadge}>
@@ -175,7 +245,10 @@ export default function EditProfileScreen() {
                             <TextInput
                                 style={styles.input}
                                 value={nome}
-                                onChangeText={setNome}
+                                onChangeText={(text) => {
+                                    setNome(text);
+                                    if (feedback) setFeedback(null);
+                                }}
                                 placeholder="Seu nome completo"
                                 placeholderTextColor="#555558"
                                 autoCapitalize="words"
@@ -187,7 +260,10 @@ export default function EditProfileScreen() {
                             <TextInput
                                 style={styles.input}
                                 value={email}
-                                onChangeText={setEmail}
+                                onChangeText={(text) => {
+                                setEmail(text);
+                                    if (feedback) setFeedback(null);
+                                }}
                                 placeholder="exemplo@email.com"
                                 placeholderTextColor="#555558"
                                 keyboardType="email-address"
@@ -256,9 +332,37 @@ const styles = StyleSheet.create({
         paddingTop: 16,
         paddingBottom: 40,
     },
+    feedbackBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        padding: 14,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+    },
+    feedbackSuccess: {
+        backgroundColor: 'rgba(48, 209, 88, 0.12)',
+        borderColor: 'rgba(48, 209, 88, 0.3)',
+    },
+    feedbackError: {
+        backgroundColor: 'rgba(255, 69, 58, 0.12)',
+        borderColor: 'rgba(255, 69, 58, 0.3)',
+    },
+    feedbackText: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    feedbackTextSuccess: {
+        color: '#30D158',
+    },
+    feedbackTextError: {
+        color: '#FF453A',
+    },
     avatarSection: {
         alignItems: 'center',
-        marginVertical: 20,
+        marginVertical: 14,
     },
     avatarWrapper: {
         position: 'relative',
