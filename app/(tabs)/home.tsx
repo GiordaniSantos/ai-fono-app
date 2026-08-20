@@ -11,10 +11,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const AVATAR_URL = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
 
 export default function HomeScreen() {
+  const paciente = useAuthStore((state) => state.paciente);
   const [activeTab, setActiveTab] = useState<'overview' | 'productivity'>('overview');
 
   return (
@@ -29,7 +31,7 @@ export default function HomeScreen() {
 
         <View style={styles.greetingContainer}>
           <Text style={styles.greetingPrefix}>Olá,</Text>
-          <Text style={styles.greetingName}>José Almeida</Text>
+          <Text style={styles.greetingName}>{paciente?.nome || 'Paciente'}</Text>
         </View>
 
         <View style={styles.filterRow}>

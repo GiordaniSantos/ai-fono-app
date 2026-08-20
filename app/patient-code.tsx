@@ -8,14 +8,20 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../store/useAuthStore';
 
 export default function PatientCodeScreen() {
   const router = useRouter();
   const [code, setCode] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const loginWithCode = useAuthStore((state) => state.loginWithCode);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -25,8 +31,24 @@ export default function PatientCodeScreen() {
     }
   };
 
-  const handleEnter = () => {
-    router.replace('/(tabs)/home');
+  const handleCodeChange = (text: string) => {
+    setCode(text);
+    if (errorMessage) {
+      setErrorMessage(null);
+    }
+  };
+
+  const handleEnter = async () => {
+    if (!code.trim() || isLoading) return;
+
+    setErrorMessage(null);
+    const result = await loginWithCode(code.trim());
+
+    if (result.success) {
+      router.replace('/(tabs)/home');
+    } else {
+      setErrorMessage(result.message || 'Código não encontrado. Verifique e tente novamente.');
+    }
   };
 
   return (
@@ -62,24 +84,39 @@ export default function PatientCodeScreen() {
 
           <View style={styles.inputContainer}>
             <TextInput
-              style={styles.input}
-              placeholder="Ex: VGXM1U"
+              style={[
+                styles.input,
+                errorMessage ? styles.inputError : null,
+              ]}
+              placeholder="Ex: 2YAMJT"
               placeholderTextColor="#555558"
               value={code}
-              onChangeText={setCode}
+              onChangeText={handleCodeChange}
               autoCapitalize="characters"
               autoCorrect={false}
+              editable={!isLoading}
               autoFocus
             />
+
+            {errorMessage && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle-outline" size={16} color="#FF453A" />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
-            style={[styles.submitButton, !code.trim() && styles.submitButtonDisabled]}
+            style={[styles.submitButton, (!code.trim() || isLoading) && styles.submitButtonDisabled]}
             activeOpacity={0.8}
             onPress={handleEnter}
-            disabled={!code.trim()}
+            disabled={!code.trim() || isLoading}
           >
-            <Text style={styles.submitButtonText}>Entrar no Consultório</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitButtonText}>Entrar no Consultório</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.helpButton}>
@@ -165,6 +202,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     letterSpacing: 2,
+  },
+  inputError: {
+    borderColor: '#FF453A',
+    backgroundColor: '#261C1D',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 8,
+  },
+  errorText: {
+    color: '#FF453A',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   submitButton: {
     backgroundColor: '#1A82FF',

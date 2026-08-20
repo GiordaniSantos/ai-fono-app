@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface ScreenHeaderProps {
   title?: string;
@@ -9,11 +10,8 @@ interface ScreenHeaderProps {
   onBack?: () => void;
   showSearch?: boolean;
   onSearch?: () => void;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
 }
-
-export const DEFAULT_AVATAR =
-  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=160&auto=format&fit=crop&q=80';
 
 export function ScreenHeader({
   title,
@@ -21,9 +19,12 @@ export function ScreenHeader({
   onBack,
   showSearch = true,
   onSearch,
-  avatarUrl = DEFAULT_AVATAR,
+  avatarUrl,
 }: ScreenHeaderProps) {
   const router = useRouter();
+  const paciente = useAuthStore((state) => state.paciente);
+
+  const userPhoto = avatarUrl !== undefined ? avatarUrl : paciente?.foto_url;
 
   const handleBack = () => {
     if (onBack) {
@@ -35,9 +36,9 @@ export function ScreenHeader({
     }
   };
 
-    const handleAvatarPress = () => {
+  const handleAvatarPress = () => {
     router.push('/(tabs)/profile');
-    };
+  };
 
   return (
     <View style={styles.headerContainer}>
@@ -69,7 +70,13 @@ export function ScreenHeader({
         )}
 
         <TouchableOpacity activeOpacity={0.8} onPress={handleAvatarPress}>
-          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          {userPhoto ? (
+            <Image source={{ uri: userPhoto }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={18} color="#1A82FF" />
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -114,5 +121,15 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     borderWidth: 1,
     borderColor: '#333336',
+  },
+  avatarPlaceholder: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#16293D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#1A82FF44',
   },
 });
