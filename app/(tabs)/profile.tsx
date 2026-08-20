@@ -107,7 +107,7 @@ export default function ProfileScreen() {
           <Text style={styles.userCode}>Código: {paciente?.codigo_acesso}</Text>
         )}
 
-        <TouchableOpacity style={styles.editButton} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.editButton} activeOpacity={0.8} onPress={() => router.push('/edit-profile')}>
           <Text style={styles.editButtonText}>Editar Perfil</Text>
         </TouchableOpacity>
 
