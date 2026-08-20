@@ -1,33 +1,73 @@
-import { Link, Tabs } from 'expo-router';
-
-import { HeaderButton } from '../../components/HeaderButton';
-import { TabBarIcon } from '../../components/TabBarIcon';
+import { Tabs } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: 'black',
-      }}>
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarStyle: {
+          backgroundColor: '#19191b',
+          borderTopWidth: 0,
+          height: 70,
+          paddingHorizontal: 40,
+        },
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="home"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <HeaderButton />
-            </Link>
+          tabBarIcon: ({ focused }) => (
+            <View style={styles.iconWrapper}>
+              <Ionicons
+                name="home"
+                size={22}
+                color={focused ? '#FFFFFF' : '#6B7280'}
+              />
+              {focused && <View style={styles.activeDot} />}
+            </View>
           ),
         }}
       />
+
       <Tabs.Screen
-        name="two"
+        name="tasks"
         options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <View style={styles.iconWrapper}>
+              <Ionicons
+                name="clipboard-outline"
+                size={22}
+                color={focused ? '#FFFFFF' : '#6B7280'}
+              />
+              {focused && <View style={styles.activeDot} />}
+            </View>
+          ),
+        }}
+      />
+      
+      <Tabs.Screen
+        name="profile"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#1A82FF',
+  },
+});
