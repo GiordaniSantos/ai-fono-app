@@ -49,7 +49,7 @@ export default function HomeScreen() {
                 activeTab === 'overview' && styles.filterTextActive,
               ]}
             >
-              Overview
+              Visão Geral
             </Text>
           </TouchableOpacity>
 
@@ -67,7 +67,7 @@ export default function HomeScreen() {
                 activeTab === 'productivity' && styles.filterTextActive,
               ]}
             >
-              Productivity
+              Produtividade
             </Text>
           </TouchableOpacity>
         </View>
@@ -75,11 +75,11 @@ export default function HomeScreen() {
         <View style={styles.dailyProgressWrapper}>
           <View style={styles.dailyProgressCard}>
             <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardTitle}>Daily progress</Text>
+              <Text style={styles.cardTitle}>Progresso diário</Text>
               <Image source={{ uri: AVATAR_URL }} style={styles.miniAvatar} />
             </View>
 
-            <Text style={styles.cardSubtitle}>Here you can see your daily task</Text>
+            <Text style={styles.cardSubtitle}>Aqui você pode ver seu progresso diário.</Text>
 
             <Text style={styles.progressPercentage}>76%</Text>
 
@@ -92,7 +92,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.categoriesSection}>
-          <Text style={styles.sectionTitle}>Categories</Text>
+          <Text style={styles.sectionTitle}>Categorias</Text>
 
           <View style={styles.gridRow}>
             <TouchableOpacity style={styles.categoryCard} activeOpacity={0.85}>

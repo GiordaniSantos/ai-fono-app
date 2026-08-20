@@ -59,12 +59,12 @@ export default function TasksScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <ScreenHeader title="Daily progress" showBack />
+        <ScreenHeader title="Progresso Diário" showBack />
 
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search"
+            placeholder="Buscar"
             placeholderTextColor="#71717A"
             value={search}
             onChangeText={setSearch}
@@ -83,7 +83,7 @@ export default function TasksScreen() {
                 filter === 'all' && styles.filterTextActive,
               ]}
             >
-              All
+              Todos
             </Text>
           </TouchableOpacity>
 
