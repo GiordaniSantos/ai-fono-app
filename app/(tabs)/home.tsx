@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,17 +7,80 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { useAuthStore } from '../../store/useAuthStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { api } from '@/services/api';
 
-const AVATAR_URL = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80';
+interface CategoryItem {
+  id: number;
+  nome: string;
+  novos_count: number;
+  concluidas_count: number;
+  total_count: number;
+  progresso_percent: number;
+}
 
 export default function HomeScreen() {
+  const router = useRouter();
   const paciente = useAuthStore((state) => state.paciente);
-  const [activeTab, setActiveTab] = useState<'overview' | 'productivity'>('overview');
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [progresso, setProgresso] = useState({ total: 0, concluidas: 0, porcentagem: 0 });
+  const [categorias, setCategorias] = useState<CategoryItem[]>([]);
+
+  const fetchHomeData = async () => {
+    try {
+      const response = await api.get('/home');
+      if (response.data) {
+        setProgresso(response.data.progresso_geral);
+        setCategorias(response.data.categorias);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados da Home:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchHomeData();
+    }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchHomeData();
+  };
+
+  const handleCategoryPress = (categoryName: string) => {
+    router.push({
+      pathname: '/(tabs)/tasks',
+      params: { categoria: categoryName },
+    });
+  };
+
+  const getCategoryColor = (index: number) => {
+    const colors = ['#FFA726', '#30D158', '#9333EA', '#EC4899', '#06B6D4'];
+    return colors[index % colors.length];
+  };
+
+  const getCategoryIcon = (nome: string): any => {
+    const lower = nome.toLowerCase();
+    if (lower.includes('voz')) return 'mic';
+    if (lower.includes('respira')) return 'file-tray-full';
+    if (lower.includes('articula')) return 'shapes';
+    if (lower.includes('flu')) return 'water';
+    return 'book';
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -26,6 +89,14 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#1A82FF"
+            colors={['#1A82FF']}
+          />
+        }
       >
         <ScreenHeader title="Home" />
 
@@ -36,39 +107,20 @@ export default function HomeScreen() {
 
         <View style={styles.filterRow}>
           <TouchableOpacity
-            style={[
-              styles.filterPill,
-              activeTab === 'overview' && styles.filterPillActive,
-            ]}
-            onPress={() => setActiveTab('overview')}
+            style={[styles.filterPill, styles.filterPillActive]}
             activeOpacity={0.8}
           >
-            <Text
-              style={[
-                styles.filterText,
-                activeTab === 'overview' && styles.filterTextActive,
-              ]}
-            >
+            <Text style={[styles.filterText, styles.filterTextActive]}>
               Visão Geral
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.filterPill,
-              activeTab === 'productivity' && styles.filterPillActive,
-            ]}
-            onPress={() => setActiveTab('productivity')}
+            style={styles.filterPill}
+            onPress={() => router.push('/(tabs)/tasks')}
             activeOpacity={0.8}
           >
-            <Text
-              style={[
-                styles.filterText,
-                activeTab === 'productivity' && styles.filterTextActive,
-              ]}
-            >
-              Produtividade
-            </Text>
+            <Text style={styles.filterText}>Tarefas</Text>
           </TouchableOpacity>
         </View>
 
@@ -76,15 +128,28 @@ export default function HomeScreen() {
           <View style={styles.dailyProgressCard}>
             <View style={styles.cardHeaderRow}>
               <Text style={styles.cardTitle}>Progresso diário</Text>
-              <Image source={{ uri: AVATAR_URL }} style={styles.miniAvatar} />
+              {paciente?.foto_url ? (
+                <Image source={{ uri: paciente.foto_url }} style={styles.miniAvatar} />
+              ) : (
+                <View style={styles.miniAvatarPlaceholder}>
+                  <Ionicons name="person" size={14} color="#1A82FF" />
+                </View>
+              )}
             </View>
 
-            <Text style={styles.cardSubtitle}>Aqui você pode ver seu progresso diário.</Text>
+            <Text style={styles.cardSubtitle}>
+              {progresso.concluidas} de {progresso.total} prescrições concluídas hoje.
+            </Text>
 
-            <Text style={styles.progressPercentage}>76%</Text>
+            <Text style={styles.progressPercentage}>{progresso.porcentagem}%</Text>
 
             <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: '76%' }]} />
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${progresso.porcentagem}%` },
+                ]}
+              />
             </View>
           </View>
           <View style={styles.cardLayer1} />
@@ -94,49 +159,101 @@ export default function HomeScreen() {
         <View style={styles.categoriesSection}>
           <Text style={styles.sectionTitle}>Categorias</Text>
 
-          <View style={styles.gridRow}>
-            <TouchableOpacity style={styles.categoryCard} activeOpacity={0.85}>
-              <View style={styles.cardHeaderRow}>
-                <View style={[styles.categoryIconBadge, { backgroundColor: '#1A82FF' }]}>
-                  <Ionicons name="book" size={18} color="#FFFFFF" />
+          {loading && !refreshing ? (
+            <ActivityIndicator size="small" color="#1A82FF" style={{ marginTop: 20 }} />
+          ) : (
+            <View style={styles.gridContainer}>
+              <TouchableOpacity
+                style={styles.categoryCard}
+                activeOpacity={0.85}
+                onPress={() => handleCategoryPress('Todas')}
+              >
+                <View style={styles.cardHeaderRow}>
+                  <View style={[styles.categoryIconBadge, { backgroundColor: '#1A82FF' }]}>
+                    <Ionicons name="layers" size={18} color="#FFFFFF" />
+                  </View>
+                  <Ionicons name="arrow-forward-circle" size={20} color="#71717A" />
                 </View>
-                <Image source={{ uri: AVATAR_URL }} style={styles.miniAvatar} />
-              </View>
 
-              <Text style={styles.badgeNewText}>5 New</Text>
-              <Text style={styles.categoryName}>Treino de{'\n'}voz</Text>
+                {progresso.total - progresso.concluidas > 0 && (
+                  <Text style={styles.badgeNewText}>
+                    {progresso.total - progresso.concluidas} Pendentes
+                  </Text>
+                )}
 
-              <View style={styles.cardFooter}>
-                <View style={styles.miniTrack}>
-                  <View style={[styles.miniFill, { width: '45%', backgroundColor: '#1A82FF' }]} />
-                </View>
-                <View style={[styles.counterBadge, { backgroundColor: '#1A82FF' }]}>
-                  <Text style={styles.counterText}>9/24</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
+                <Text style={styles.categoryName} numberOfLines={2}>
+                  Todas as{'\n'}Tarefas
+                </Text>
 
-            <TouchableOpacity style={styles.categoryCard} activeOpacity={0.85}>
-              <View style={styles.cardHeaderRow}>
-                <View style={[styles.categoryIconBadge, { backgroundColor: '#FFA726' }]}>
-                  <Ionicons name="file-tray-full" size={18} color="#FFFFFF" />
+                <View style={styles.cardFooter}>
+                  <View style={styles.miniTrack}>
+                    <View
+                      style={[
+                        styles.miniFill,
+                        {
+                          width: `${progresso.porcentagem}%`,
+                          backgroundColor: '#1A82FF',
+                        },
+                      ]}
+                    />
+                  </View>
+                  <View style={[styles.counterBadge, { backgroundColor: '#1A82FF' }]}>
+                    <Text style={styles.counterText}>
+                      {progresso.concluidas}/{progresso.total}
+                    </Text>
+                  </View>
                 </View>
-                <Image source={{ uri: AVATAR_URL }} style={styles.miniAvatar} />
-              </View>
+              </TouchableOpacity>
+              
+              {categorias.map((cat, index) => {
+                const color = getCategoryColor(index);
+                const iconName = getCategoryIcon(cat.nome);
 
-              <Text style={styles.badgeNewText}>2 New</Text>
-              <Text style={styles.categoryName}>Exercícios{'\n'}respiratórios</Text>
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={styles.categoryCard}
+                    activeOpacity={0.85}
+                    onPress={() => handleCategoryPress(cat.nome)}
+                  >
+                    <View style={styles.cardHeaderRow}>
+                      <View style={[styles.categoryIconBadge, { backgroundColor: color }]}>
+                        <Ionicons name={iconName} size={18} color="#FFFFFF" />
+                      </View>
+                      <Ionicons name="arrow-forward-circle" size={20} color="#71717A" />
+                    </View>
 
-              <View style={styles.cardFooter}>
-                <View style={styles.miniTrack}>
-                  <View style={[styles.miniFill, { width: '30%', backgroundColor: '#FFA726' }]} />
-                </View>
-                <View style={[styles.counterBadge, { backgroundColor: '#FFA726' }]}>
-                  <Text style={styles.counterText}>4/18</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </View>
+                    {cat.novos_count > 0 && (
+                      <Text style={styles.badgeNewText}>{cat.novos_count}</Text>
+                    )}
+
+                    <Text style={styles.categoryName} numberOfLines={2}>
+                      {cat.nome}
+                    </Text>
+
+                    <View style={styles.cardFooter}>
+                      <View style={styles.miniTrack}>
+                        <View
+                          style={[
+                            styles.miniFill,
+                            {
+                              width: `${cat.progresso_percent}%`,
+                              backgroundColor: color,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <View style={[styles.counterBadge, { backgroundColor: color }]}>
+                        <Text style={styles.counterText}>
+                          {cat.concluidas_count}/{cat.total_count}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -152,35 +269,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 32,
-  },
-  topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: '#333336',
   },
   greetingContainer: {
     marginBottom: 20,
@@ -207,6 +295,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 10,
     borderRadius: 20,
+    backgroundColor: '#262629',
   },
   filterPillActive: {
     backgroundColor: '#1A82FF',
@@ -265,6 +354,14 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
   },
+  miniAvatarPlaceholder: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#16293D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardSubtitle: {
     fontSize: 13,
     color: '#8E8E93',
@@ -297,12 +394,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 16,
   },
-  gridRow: {
+  gridContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 14,
   },
   categoryCard: {
-    flex: 1,
+    width: '47.8%',
     backgroundColor: '#262629',
     borderRadius: 20,
     padding: 16,
