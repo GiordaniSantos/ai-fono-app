@@ -39,8 +39,8 @@ export default function HomeScreen() {
     try {
       const response = await api.get('/home');
       if (response.data) {
-        setProgresso(response.data.progresso_geral);
-        setCategorias(response.data.categorias);
+        setProgresso(response.data.progresso_geral || { total: 0, concluidas: 0, porcentagem: 0 });
+        setCategorias(response.data.categorias || []);
       }
     } catch (error) {
       console.error('Erro ao carregar dados da Home:', error);
@@ -73,14 +73,17 @@ export default function HomeScreen() {
     return colors[index % colors.length];
   };
 
-  const getCategoryIcon = (nome: string): any => {
+  const getCategoryIcon = (nome: string): keyof typeof Ionicons.glyphMap => {
     const lower = nome.toLowerCase();
     if (lower.includes('voz')) return 'mic';
     if (lower.includes('respira')) return 'file-tray-full';
-    if (lower.includes('articula')) return 'shapes';
-    if (lower.includes('flu')) return 'water';
+    if (lower.includes('articula') || lower.includes('fala')) return 'shapes';
+    if (lower.includes('flu') || lower.includes('deglut')) return 'water';
+    if (lower.includes('orofacial')) return 'happy';
     return 'book';
   };
+
+  const pendentesGerais = Math.max(0, progresso.total - progresso.concluidas);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -138,16 +141,16 @@ export default function HomeScreen() {
             </View>
 
             <Text style={styles.cardSubtitle}>
-              {progresso.concluidas} de {progresso.total} prescrições concluídas hoje.
+              {progresso.concluidas} de {progresso.total} exercícios concluídos hoje.
             </Text>
 
-            <Text style={styles.progressPercentage}>{progresso.porcentagem}%</Text>
+            <Text style={styles.progressPercentage}>{progresso.porcentagem || 0}%</Text>
 
             <View style={styles.progressBarTrack}>
               <View
                 style={[
                   styles.progressBarFill,
-                  { width: `${progresso.porcentagem}%` },
+                  { width: `${Math.min(100, Math.max(0, progresso.porcentagem || 0))}%` },
                 ]}
               />
             </View>
@@ -175,9 +178,9 @@ export default function HomeScreen() {
                   <Ionicons name="arrow-forward-circle" size={20} color="#71717A" />
                 </View>
 
-                {progresso.total - progresso.concluidas > 0 && (
+                {pendentesGerais > 0 && (
                   <Text style={styles.badgeNewText}>
-                    {progresso.total - progresso.concluidas} Pendentes
+                    {pendentesGerais} Pendentes
                   </Text>
                 )}
 
@@ -191,7 +194,7 @@ export default function HomeScreen() {
                       style={[
                         styles.miniFill,
                         {
-                          width: `${progresso.porcentagem}%`,
+                          width: `${Math.min(100, Math.max(0, progresso.porcentagem || 0))}%`,
                           backgroundColor: '#1A82FF',
                         },
                       ]}
@@ -224,7 +227,7 @@ export default function HomeScreen() {
                     </View>
 
                     {cat.novos_count > 0 && (
-                      <Text style={styles.badgeNewText}>{cat.novos_count}</Text>
+                      <Text style={styles.badgeNewText}>{cat.novos_count} Pendentes</Text>
                     )}
 
                     <Text style={styles.categoryName} numberOfLines={2}>
@@ -237,7 +240,7 @@ export default function HomeScreen() {
                           style={[
                             styles.miniFill,
                             {
-                              width: `${cat.progresso_percent}%`,
+                              width: `${Math.min(100, Math.max(0, cat.progresso_percent || 0))}%`,
                               backgroundColor: color,
                             },
                           ]}

@@ -24,29 +24,93 @@ import {
   setAudioModeAsync,
   useAudioPlayer,
 } from 'expo-audio';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { api } from '@/services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-type MediaType = 'texto' | 'imagem' | 'video';
+type MediaType = 'texto' | 'midia';
 type RecordMode = 'audio' | 'video';
 
-interface PrescricaoCompleta {
+interface ExercicioDetalhe {
   id: number;
-  frequencia_diaria: number;
-  data_fim: string | null;
-  realizada: boolean;
-  exercicio: {
-    id: number;
-    titulo: string;
-    categoria: string;
-    tipo: string;
-    instrucoes: string;
-    texto: string;
-    imagem_url: string | null;
-    video_url: string | null;
-    video_thumb_url: string | null;
-  };
+  nome: string;
+  descricao: string;
+  categoria: string;
+  imagens: string[];
+  videos: string[];
+  audios: string[];
+  realizado_hoje: boolean;
+}
+
+function VideoPlayerItem({ uri, label }: { uri: string; label: string }) {
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.mediaItemWrapper}>
+        <Text style={styles.mediaItemLabel}>{label}</Text>
+        <video
+          src={uri}
+          controls
+          style={{ width: '100%', height: 220, borderRadius: 12, backgroundColor: '#000' } as any}
+        />
+      </View>
+    );
+  }
+
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = false;
+  });
+
+  return (
+    <View style={styles.mediaItemWrapper}>
+      <Text style={styles.mediaItemLabel}>{label}</Text>
+      <VideoView
+        player={player}
+        style={styles.nativeVideo}
+        allowsPictureInPicture
+        nativeControls
+      />
+    </View>
+  );
+}
+
+function AudioPlayerItem({ uri, label }: { uri: string; label: string }) {
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.mediaItemWrapper}>
+        <Text style={styles.mediaItemLabel}>{label}</Text>
+        <audio src={uri} controls style={{ width: '100%' } as any} />
+      </View>
+    );
+  }
+
+  const player = useAudioPlayer(uri);
+
+  return (
+    <View style={styles.mediaItemWrapper}>
+      <Text style={styles.mediaItemLabel}>{label}</Text>
+      <TouchableOpacity
+        style={styles.audioCustomPlayer}
+        onPress={() => {
+          if (player.playing) {
+            player.pause();
+          } else {
+            player.play();
+          }
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name={player.playing ? 'pause-circle' : 'play-circle'}
+          size={32}
+          color="#1A82FF"
+        />
+        <Text style={styles.audioCustomPlayerText}>
+          {player.playing ? 'Pausar Áudio' : 'Reproduzir Áudio'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export default function ExerciseDetailScreen() {
@@ -55,7 +119,7 @@ export default function ExerciseDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [prescricao, setPrescricao] = useState<PrescricaoCompleta | null>(null);
+  const [exercicio, setExercicio] = useState<ExercicioDetalhe | null>(null);
 
   const [activeMediaTab, setActiveMediaTab] = useState<MediaType>('texto');
   const [fontSize, setFontSize] = useState<number>(18);
@@ -86,21 +150,31 @@ export default function ExerciseDetailScreen() {
   const audioChunksRef = useRef<any[]>([]);
   const audioElementRef = useRef<any>(null);
 
-  const fetchPrescricao = async () => {
+  const fetchExercicio = async () => {
     try {
-      const response = await api.get(`/prescricoes/${id}`);
-      if (response.data.data) {
-        setPrescricao(response.data.data);
+      const response = await api.get(`/exercicios/${id}`);
+      if (response.data && response.data.data) {
+        const dados = response.data.data;
+        setExercicio(dados);
+        const temArquivos = (dados.imagens?.length > 0) || (dados.videos?.length > 0) || (dados.audios?.length > 0);
+        if (!temArquivos) {
+          setActiveMediaTab('texto');
+        }
       }
     } catch (error) {
-      console.error('Erro ao buscar prescrição:', error);
+      console.error('Erro ao buscar exercício:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPrescricao();
+    setExercicio(null);
+    setLoading(true);
+    setActiveMediaTab('texto');
+    setRecordedResult(null);
+    
+    fetchExercicio();
 
     return () => {
       if (audioElementRef.current) {
@@ -274,7 +348,6 @@ export default function ExerciseDetailScreen() {
       audio.onended = () => setIsPlaying(false);
       audio.onerror = () => setIsPlaying(false);
     } else {
-      // Mobile via expo-audio
       if (player.playing) {
         player.pause();
         setIsPlaying(false);
@@ -312,17 +385,17 @@ export default function ExerciseDetailScreen() {
         }
       }
 
-      const response = await api.post(`/prescricoes/${id}/concluir`, formData, {
+      const response = await api.post(`/exercicios/${id}/concluir`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         transformRequest: (data) => data,
       });
 
-      if (prescricao) {
-        setPrescricao({
-          ...prescricao,
-          realizada: true,
+      if (exercicio) {
+        setExercicio({
+          ...exercicio,
+          realizado_hoje: true,
         });
       }
 
@@ -332,7 +405,7 @@ export default function ExerciseDetailScreen() {
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } catch (error: any) {
-      console.error('Erro ao concluir prescrição:', error?.response?.data || error);
+      console.error('Erro ao concluir exercício:', error?.response?.data || error);
 
       let errorMsg = 'Não foi possível salvar o exercício.';
       if (error?.response?.data?.errors?.arquivo) {
@@ -347,7 +420,7 @@ export default function ExerciseDetailScreen() {
     }
   };
 
-  if (loading || !prescricao) {
+  if (loading || !exercicio) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1A82FF" />
@@ -355,7 +428,7 @@ export default function ExerciseDetailScreen() {
     );
   }
 
-  const { exercicio } = prescricao;
+  const temMidia = (exercicio.imagens?.length > 0) || (exercicio.videos?.length > 0) || (exercicio.audios?.length > 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -372,9 +445,9 @@ export default function ExerciseDetailScreen() {
 
         <View style={styles.headerTitles}>
           <Text style={styles.headerCategory}>
-            {exercicio.categoria.toUpperCase()}
+            {(exercicio.categoria || 'GERAL').toUpperCase()}
           </Text>
-          <Text style={styles.headerMainTitle}>{exercicio.titulo}</Text>
+          <Text style={styles.headerMainTitle}>{exercicio.nome}</Text>
         </View>
 
         {activeMediaTab === 'texto' ? (
@@ -407,12 +480,9 @@ export default function ExerciseDetailScreen() {
               <Ionicons name="fitness-outline" size={18} color="#1A82FF" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.orientationTitle}>Orientação do Fonoaudiólogo</Text>
+              <Text style={styles.orientationTitle}>Detalhes do Exercício</Text>
               <Text style={styles.orientationSubtitle}>
-                Recomendação clínica de prática:{' '}
-                <Text style={styles.orientationHighlight}>
-                  {prescricao.frequencia_diaria}x ao dia
-                </Text>
+                Categoria: <Text style={styles.orientationHighlight}>{exercicio.categoria}</Text>
               </Text>
             </View>
           </View>
@@ -421,35 +491,24 @@ export default function ExerciseDetailScreen() {
             <View
               style={[
                 styles.statusBadge,
-                prescricao.realizada
-                  ? styles.statusBadgeDone
-                  : styles.statusBadgePending,
+                exercicio.realizado_hoje ? styles.statusBadgeDone : styles.statusBadgePending,
               ]}
             >
               <Ionicons
-                name={prescricao.realizada ? 'checkmark-circle' : 'time-outline'}
+                name={exercicio.realizado_hoje ? 'checkmark-circle' : 'time-outline'}
                 size={14}
-                color={prescricao.realizada ? '#30D158' : '#FFA726'}
+                color={exercicio.realizado_hoje ? '#30D158' : '#FFA726'}
               />
               <Text
                 style={[
                   styles.statusBadgeText,
-                  prescricao.realizada
-                    ? styles.statusBadgeTextDone
-                    : styles.statusBadgeTextPending,
+                  exercicio.realizado_hoje ? styles.statusBadgeTextDone : styles.statusBadgeTextPending,
                 ]}
               >
-                {prescricao.realizada
-                  ? 'Execução de hoje registrada'
-                  : 'Pendente de registro hoje'}
+                {exercicio.realizado_hoje ? 'Executado hoje' : 'Pendente para hoje'}
               </Text>
             </View>
           </View>
-        </View>
-
-        <View style={styles.instructionCard}>
-          <Ionicons name="bulb-outline" size={20} color="#38BDF8" />
-          <Text style={styles.instructionText}>{exercicio.instrucoes}</Text>
         </View>
 
         <View style={styles.mediaTabsContainer}>
@@ -472,53 +531,30 @@ export default function ExerciseDetailScreen() {
                 activeMediaTab === 'texto' && styles.mediaTabTextActive,
               ]}
             >
-              Texto
+              Descrição
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.mediaTabButton,
-              activeMediaTab === 'imagem' && styles.mediaTabButtonActive,
+              activeMediaTab === 'midia' && styles.mediaTabButtonActive,
             ]}
-            onPress={() => setActiveMediaTab('imagem')}
+            onPress={() => setActiveMediaTab('midia')}
             activeOpacity={0.7}
           >
             <Ionicons
               name="image-outline"
               size={16}
-              color={activeMediaTab === 'imagem' ? '#FFFFFF' : '#8E8E93'}
+              color={activeMediaTab === 'midia' ? '#FFFFFF' : '#8E8E93'}
             />
             <Text
               style={[
                 styles.mediaTabText,
-                activeMediaTab === 'imagem' && styles.mediaTabTextActive,
+                activeMediaTab === 'midia' && styles.mediaTabTextActive,
               ]}
             >
-              Imagem
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.mediaTabButton,
-              activeMediaTab === 'video' && styles.mediaTabButtonActive,
-            ]}
-            onPress={() => setActiveMediaTab('video')}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="play-circle-outline"
-              size={16}
-              color={activeMediaTab === 'video' ? '#FFFFFF' : '#8E8E93'}
-            />
-            <Text
-              style={[
-                styles.mediaTabText,
-                activeMediaTab === 'video' && styles.mediaTabTextActive,
-              ]}
-            >
-              Vídeo
+              Mídias
             </Text>
           </TouchableOpacity>
         </View>
@@ -526,51 +562,47 @@ export default function ExerciseDetailScreen() {
         <View style={styles.displayCard}>
           {activeMediaTab === 'texto' && (
             <Text style={[styles.bodyText, { fontSize, lineHeight: fontSize * 1.6 }]}>
-              {exercicio.texto}
+              {exercicio.descricao || 'Nenhuma descrição detalhada informada.'}
             </Text>
           )}
 
-          {activeMediaTab === 'imagem' && (
-            <View style={styles.imageWrapper}>
-              {exercicio.imagem_url ? (
-                <Image
-                  source={{ uri: exercicio.imagem_url }}
-                  style={styles.contentImage}
-                  resizeMode="cover"
-                />
-              ) : (
+          {activeMediaTab === 'midia' && (
+            <View style={styles.mediaContainer}>
+              {!temMidia ? (
                 <View style={styles.emptyMediaBox}>
-                  <Ionicons name="image-outline" size={40} color="#555" />
-                  <Text style={styles.emptyMediaText}>Nenhuma imagem anexada</Text>
+                  <Ionicons name="folder-open-outline" size={40} color="#555" />
+                  <Text style={styles.emptyMediaText}>Nenhum arquivo anexado</Text>
                 </View>
-              )}
-              <Text style={styles.mediaCaption}>
-                Guia visual anatômico do exercício
-              </Text>
-            </View>
-          )}
+              ) : (
+                <View style={{ gap: 16 }}>
+                  {exercicio.videos?.map((videoUrl, index) => (
+                    <VideoPlayerItem
+                      key={`vid_${index}`}
+                      uri={videoUrl}
+                      label={`Vídeo Demonstrativo ${index + 1}`}
+                    />
+                  ))}
 
-          {activeMediaTab === 'video' && (
-            <View style={styles.videoWrapper}>
-              {exercicio.video_thumb_url ? (
-                <Image
-                  source={{ uri: exercicio.video_thumb_url }}
-                  style={styles.contentVideoThumb}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.emptyMediaBox}>
-                  <Ionicons name="videocam-outline" size={40} color="#555" />
+                  {exercicio.imagens?.map((imgUrl, index) => (
+                    <View key={`img_${index}`} style={styles.mediaItemWrapper}>
+                      <Text style={styles.mediaItemLabel}>Imagem {index + 1}</Text>
+                      <Image
+                        source={{ uri: imgUrl }}
+                        style={styles.contentImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  ))}
+
+                  {exercicio.audios?.map((audioUrl, index) => (
+                    <AudioPlayerItem
+                      key={`aud_${index}`}
+                      uri={audioUrl}
+                      label={`Áudio ${index + 1}`}
+                    />
+                  ))}
                 </View>
               )}
-              <TouchableOpacity style={styles.videoPlayOverlay} activeOpacity={0.8}>
-                <View style={styles.playIconCircle}>
-                  <Ionicons name="play" size={32} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
-              <Text style={styles.mediaCaption}>
-                Vídeo de demonstração clínica
-              </Text>
             </View>
           )}
         </View>
@@ -638,7 +670,7 @@ export default function ExerciseDetailScreen() {
             ) : (
               <>
                 <Text style={styles.finishMainButtonText}>
-                  {prescricao.realizada ? 'Refazer Exercício' : 'Finalizar Exercício'}
+                  {exercicio.realizado_hoje ? 'Refazer Exercício' : 'Finalizar Exercício'}
                 </Text>
                 <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
               </>
@@ -888,23 +920,6 @@ const styles = StyleSheet.create({
   statusBadgeTextPending: {
     color: '#FFA726',
   },
-  instructionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#16293D',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#1A82FF33',
-  },
-  instructionText: {
-    flex: 1,
-    color: '#93C5FD',
-    fontSize: 13,
-    lineHeight: 18,
-  },
   mediaTabsContainer: {
     flexDirection: 'row',
     backgroundColor: '#262629',
@@ -945,41 +960,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '500',
   },
-  imageWrapper: {
-    alignItems: 'center',
+  mediaContainer: {
     gap: 12,
+  },
+  mediaItemWrapper: {
+    gap: 6,
+  },
+  mediaItemLabel: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '700',
   },
   contentImage: {
     width: '100%',
     height: 220,
-    borderRadius: 14,
+    borderRadius: 12,
+    backgroundColor: '#1E1E22',
   },
-  videoWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    gap: 12,
-  },
-  contentVideoThumb: {
+  nativeVideo: {
     width: '100%',
     height: 220,
-    borderRadius: 14,
+    borderRadius: 12,
+    backgroundColor: '#000000',
   },
-  videoPlayOverlay: {
-    ...StyleSheet.absoluteFill,
-    height: 220,
+  audioCustomPlayer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 14,
+    gap: 12,
+    backgroundColor: '#1E1E22',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333336',
   },
-  playIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#1A82FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingLeft: 4,
+  audioCustomPlayerText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyMediaBox: {
     width: '100%',
@@ -993,11 +1010,6 @@ const styles = StyleSheet.create({
   emptyMediaText: {
     color: '#71717A',
     fontSize: 13,
-  },
-  mediaCaption: {
-    color: '#8E8E93',
-    fontSize: 12,
-    textAlign: 'center',
   },
   recordingResultCard: {
     flexDirection: 'row',

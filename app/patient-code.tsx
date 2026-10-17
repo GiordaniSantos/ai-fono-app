@@ -119,9 +119,6 @@ export default function PatientCodeScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.helpButton}>
-            <Text style={styles.helpText}>Não possui ou perdeu o código?</Text>
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

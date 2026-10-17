@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -14,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { api } from '../../services/api';
 
-export interface PrescricaoItem {
+export interface ExercicioItem {
   id: number;
   titulo: string;
   subtitulo: string;
@@ -29,25 +30,29 @@ export default function TasksScreen() {
   const params = useLocalSearchParams<{ categoria?: string }>();
 
   const [loading, setLoading] = useState(true);
-  const [prescricoes, setPrescricoes] = useState<PrescricaoItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exercicios, setExercicios] = useState<ExercicioItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   
-  useEffect(() => {
-    if (params.categoria) {
-      setSelectedCategory(params.categoria);
-    }
-  }, [params.categoria]);
+  useFocusEffect(
+    useCallback(() => {
+      if (params.categoria) {
+        setSelectedCategory(params.categoria);
+      }
+    }, [params.categoria])
+  );
 
   const fetchTasks = async () => {
     try {
-      const response = await api.get('/prescricoes');
-      if (response.data.data) {
-        setPrescricoes(response.data.data);
+      const response = await api.get('/exercicios');
+      if (response.data && response.data.data) {
+        setExercicios(response.data.data);
       }
     } catch (error) {
-      console.error('Erro ao buscar prescrições:', error);
+      console.error('Erro ao buscar exercícios:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -57,26 +62,31 @@ export default function TasksScreen() {
     }, [])
   );
 
-  const categoriasDisponiveis = useMemo(() => {
-    const rawCategories = Array.from(new Set(prescricoes.map((p) => p.categoria)));
-    return ['Todas', ...rawCategories];
-  }, [prescricoes]);
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchTasks();
+  };
 
-  const prescricoesFiltradas = useMemo(() => {
-    return prescricoes.filter((item) => {
+  const categoriasDisponiveis = useMemo(() => {
+    const rawCategories = Array.from(new Set(exercicios.map((e) => e.categoria)));
+    return ['Todas', ...rawCategories];
+  }, [exercicios]);
+
+  const exerciciosFiltrados = useMemo(() => {
+    return exercicios.filter((item) => {
       if (selectedCategory === 'Todas') return true;
       return item.categoria.toLowerCase() === selectedCategory.toLowerCase();
     });
-  }, [selectedCategory, prescricoes]);
+  }, [selectedCategory, exercicios]);
 
-  const totalGeral = prescricoes.length;
-  const concluidasGeral = prescricoes.filter((p) => p.concluido).length;
+  const totalGeral = exercicios.length;
+  const concluidasGeral = exercicios.filter((e) => e.concluido).length;
   const progressoPercent = totalGeral > 0 ? Math.round((concluidasGeral / totalGeral) * 100) : 0;
 
-  const handleOpenExercise = (prescricaoId: number) => {
+  const handleOpenExercise = (exercicioId: number) => {
     router.push({
       pathname: '/exercise/[id]',
-      params: { id: prescricaoId },
+      params: { id: exercicioId },
     });
   };
 
@@ -93,7 +103,7 @@ export default function TasksScreen() {
           <View style={styles.summaryInfo}>
             <Text style={styles.summaryTitle}>Progresso das Tarefas</Text>
             <Text style={styles.summarySubtitle}>
-              {concluidasGeral} de {totalGeral} prescrições realizadas
+              {concluidasGeral} de {totalGeral} exercícios realizados hoje
             </Text>
           </View>
           <View style={styles.progressCircle}>
@@ -111,8 +121,8 @@ export default function TasksScreen() {
               const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
               const count =
                 cat === 'Todas'
-                  ? prescricoes.length
-                  : prescricoes.filter(
+                  ? exercicios.length
+                  : exercicios.filter(
                       (item) => item.categoria.toLowerCase() === cat.toLowerCase()
                     ).length;
 
@@ -155,14 +165,22 @@ export default function TasksScreen() {
           </ScrollView>
         </View>
 
-        {loading ? (
+        {loading && !refreshing ? (
           <ActivityIndicator size="large" color="#1A82FF" style={{ marginTop: 40 }} />
         ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#1A82FF"
+                colors={['#1A82FF']}
+              />
+            }
           >
-            {prescricoesFiltradas.length === 0 ? (
+            {exerciciosFiltrados.length === 0 ? (
               <View style={styles.emptyStateContainer}>
                 <Ionicons name="folder-open-outline" size={48} color="#444448" />
                 <Text style={styles.emptyStateText}>
@@ -170,7 +188,7 @@ export default function TasksScreen() {
                 </Text>
               </View>
             ) : (
-              prescricoesFiltradas.map((item) => (
+              exerciciosFiltrados.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.card}
@@ -181,9 +199,6 @@ export default function TasksScreen() {
                     <View style={styles.tagsRow}>
                       <View style={styles.categoryTag}>
                         <Text style={styles.categoryTagText}>{item.categoria}</Text>
-                      </View>
-                      <View style={styles.typeTag}>
-                        <Text style={styles.typeTagText}>{item.tipo}</Text>
                       </View>
                     </View>
 
@@ -199,9 +214,9 @@ export default function TasksScreen() {
                     )}
                   </View>
 
-                  <Text style={styles.cardTitle}>{item.titulo}</Text>
-                  <Text style={styles.cardSubtitle}>{item.subtitulo}</Text>
-
+                  <Text style={styles.cardTitle}>
+                    {item.titulo}
+                  </Text>
                   <View style={styles.cardFooter}>
                     <View style={styles.actionPrompt}>
                       <Ionicons
@@ -370,17 +385,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  typeTag: {
-    backgroundColor: '#1F1F22',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 7,
-  },
-  typeTagText: {
-    color: '#A1A1AA',
-    fontSize: 11,
-    fontWeight: '600',
-  },
   statusBadgeCompleted: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -403,7 +407,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 17,
   },
   cardSubtitle: {
     fontSize: 13,
